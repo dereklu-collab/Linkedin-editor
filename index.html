@@ -1209,7 +1209,6 @@ function App(){
                     <button className="btn btn-ghost" onClick={()=>copy(tags.join(" "),"Hashtags copied")} disabled={!tags.length}>Copy #tags</button>
                     <button className="btn btn-ghost" onClick={()=>download(genText,`post-${form.platform}.txt`)}>Download .txt</button>
                     <button className="btn btn-primary" onClick={()=>copy(genText,"Post copied")}>Copy post</button>
-                    <a href={PLATFORMS[form.platform].url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost">Open {PLATFORMS[form.platform].name} ↗</a>
                   </div>
                 </div>
               </>
