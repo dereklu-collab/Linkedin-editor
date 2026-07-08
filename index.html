@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Contact Sheet — turn experiences into posts</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F3F5F6; --surface:#FFFFFF; --ink:#14171F; --muted:#6B7280;
+    --line:#E2E6EA; --indigo:#33415C; --indigo-deep:#26314A; --amber:#D98E3B;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .font-display{font-family:'Fraunces',serif}
+  .font-mono{font-family:'IBM Plex Mono',monospace}
+  .app-scroll::-webkit-scrollbar{width:10px;height:10px}
+  .app-scroll::-webkit-scrollbar-thumb{background:#cfd6dc;border-radius:8px;border:2px solid var(--bg)}
+
+  /* Film strip signature element */
+  .filmstrip{
+    background:#1c2128;
+    border-radius:10px;
+    position:relative;
+    padding:22px 12px;
+  }
+  .filmstrip::before,.filmstrip::after{
+    content:"";position:absolute;left:8px;right:8px;height:10px;
+    background-image:radial-gradient(circle,#0c0e12 0 3px, transparent 3.5px);
+    background-size:16px 10px;background-repeat:repeat-x;
+  }
+  .filmstrip::before{top:6px}
+  .filmstrip::after{bottom:6px}
+  .frame{
+    background:#0c0e12;border-radius:4px;overflow:hidden;position:relative;
+    outline:2px solid transparent;transition:outline-color .15s ease, transform .15s ease;
+  }
+  .frame.hero{outline-color:var(--amber)}
+  .frame:hover{transform:translateY(-2px)}
+  .frame-num{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8b93a1;letter-spacing:.08em}
+
+  .tab{position:relative;padding:9px 16px;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;transition:.15s;color:var(--muted)}
+  .tab:hover{color:var(--ink)}
+  .tab.active{background:var(--indigo);color:#fff}
+  .field label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:500}
+  .field input,.field textarea,.field select{
+    width:100%;margin-top:5px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;
+    background:#fff;font-size:14px;color:var(--ink);font-family:'Inter',sans-serif;transition:.15s;
+  }
+  .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(51,65,92,.12)}
+  .field textarea{resize:vertical;min-height:64px;line-height:1.5}
+  .btn{font-weight:600;font-size:14px;border-radius:9px;padding:10px 16px;cursor:pointer;transition:.15s;border:1px solid transparent;display:inline-flex;align-items:center;gap:7px;justify-content:center}
+  .btn-primary{background:var(--indigo);color:#fff}
+  .btn-primary:hover{background:var(--indigo-deep)}
+  .btn-ghost{background:#fff;border-color:var(--line);color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--indigo);color:var(--indigo)}
+  .btn-ghost.on{border-color:var(--indigo);background:var(--indigo);color:#fff}
+  .chip{font-size:12px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:#fff;cursor:pointer;transition:.15s;font-weight:500}
+  .chip:hover{border-color:var(--indigo)}
+  .chip.on{background:var(--indigo);border-color:var(--indigo);color:#fff}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 20px;border-radius:10px;font-size:14px;font-weight:500;z-index:50;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+  .dropzone{border:1.5px dashed #c3cbd3;border-radius:12px;transition:.15s;background:#fbfcfd}
+  .dropzone.drag{border-color:var(--indigo);background:#eef1f6}
+  @keyframes rise{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+  .toast{animation:rise .2s ease}
+  [contenteditable]:focus{outline:none}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useRef,useEffect,useCallback} = React;
+
+/* ---------- platform config ---------- */
+const PLATFORMS = {
+  linkedin:{name:"LinkedIn", tag:"in", color:"#0A66C2", limit:3000, blurb:"Professional, reflective, career-oriented", url:"https://www.linkedin.com/feed/?shareActive=true"},
+  instagram:{name:"Instagram", tag:"IG", color:"#C13584", limit:2200, blurb:"Concise, personable, caption-friendly", url:"https://www.instagram.com/"},
+  x:{name:"X", tag:"X", color:"#111111", limit:280, blurb:"Short, punchy, thread-ready", url:"https://x.com/compose/post"},
+  facebook:{name:"Facebook", tag:"f", color:"#1877F2", limit:63206, blurb:"Conversational, broad-audience", url:"https://www.facebook.com/"},
+};
+const TONES = ["Professional","Warm","Excited","Reflective","Humble","Confident","Casual","Story-driven"];
+const VARIANTS = [
+  {key:"standard", label:"Standard"},
+  {key:"short", label:"Shorter"},
+  {key:"polished", label:"More polished"},
+  {key:"personal", label:"More personal"},
+  {key:"professional", label:"More professional"},
+];
+
+/* ---------- generation engine (template-based MVP) ---------- */
+function hashtagsFor(d){
+  const base = {
+    linkedin:["#CareerGrowth","#ProfessionalDevelopment"],
+    instagram:["#careerjourney","#learning"],
+    x:["#career"],
+    facebook:["#grateful"],
+  }[d.platform] || [];
+  const dyn=[];
+  const t=(d.experienceType||"").toLowerCase();
+  if(t.includes("extern")) dyn.push("#Externship");
+  if(t.includes("intern")) dyn.push("#Internship");
+  if(t.includes("conf")) dyn.push("#Conference");
+  if(t.includes("workshop")) dyn.push("#Workshop");
+  if(t.includes("network")) dyn.push("#Networking");
+  if(d.company){ dyn.push("#"+d.company.replace(/[^a-zA-Z0-9]/g,"")); }
+  const all=[...dyn,...base];
+  const seen=new Set(); const out=[];
+  for(const h of all){ const k=h.toLowerCase(); if(!seen.has(k)){seen.add(k);out.push(h);} }
+  return out.slice(0, d.platform==="x"?2:5);
+}
+
+function sentenceList(arr){
+  const a=arr.filter(Boolean);
+  if(a.length===0) return "";
+  if(a.length===1) return a[0];
+  if(a.length===2) return a[0]+" and "+a[1];
+  return a.slice(0,-1).join(", ")+", and "+a[a.length-1];
+}
+
+const TONE_DEPTH = {
+  Professional:3, Reflective:3, "Story-driven":3,
+  Warm:2, Humble:2, Confident:2,
+  Excited:1, Casual:1,
+};
+
+// Strip trailing sentence punctuation so template-added punctuation doesn't double up.
+// Also normalizes surrounding whitespace.
+const clean = (x)=> {
+  if(!x) return "";
+  return x.replace(/\s+/g," ").trim().replace(/[.!?,;:]+$/,"").trim();
+};
+// "a" vs "an" based on the first vowel-sound of the following word.
+const aOrAn = (word)=> /^[aeiouAEIOU]/.test((word||"").trim()) ? "an" : "a";
+// Final polish pass — catches any doubled punctuation, weird spacing, or duplicated words at seams.
+const polish = (t)=> t
+  .replace(/([.!?]){2,}/g, "$1")        // .. -> .
+  .replace(/([,;:]){2,}/g, "$1")        // ,, -> ,
+  .replace(/\s+([.,;:!?])/g, "$1")      // space before punctuation
+  .replace(/([.!?,;:])([A-Za-z])/g, "$1 $2") // missing space after punctuation
+  .replace(/[ \t]{2,}/g, " ")           // double spaces
+  .replace(/\n{3,}/g, "\n\n")           // triple+ newlines
+  .replace(/ *\n */g, "\n")             // trim spaces around newlines
+  .trim();
+
+function generate(d, variant){
+  const company = clean(d.company) || "the team";
+  const exp = clean(d.experienceType).toLowerCase() || "experience";
+  const role = clean(d.program);
+  const did = clean(d.whatYouDid);
+  const learned = clean(d.whatYouLearned);
+  const people = clean(d.people);
+  const moment = clean(d.favoriteMoment);
+  const relevance = clean(d.careerRelevance);
+  const thanks = clean(d.callout);
+  const loc = clean(d.location);
+  const when = clean(d.date);
+  const tone = (d.tone||"Professional");
+  const tags = hashtagsFor(d);
+  const lc = (x)=> x ? x[0].toLowerCase()+x.slice(1) : "";
+  const cap = (x)=> x ? x[0].toUpperCase()+x.slice(1) : "";
+  const expArticle = aOrAn(exp);
+
+  const roleClause = role ? ` as part of ${role}` : "";
+  const locClause = loc ? ` in ${loc}` : "";
+  const whenClause = when ? ` (${when})` : "";
+  const clauses = {company, exp, expArticle, role, did, learned, people, moment, relevance, thanks, loc, when, roleClause, locClause, whenClause, lc, cap};
+
+  const openers = {
+    Professional:`I recently had the opportunity to take part in ${expArticle} ${exp} with ${company}${roleClause}.`,
+    Warm:`Grateful doesn't quite cover it — I just wrapped ${expArticle} ${exp} with ${company}${roleClause}${locClause}.`,
+    Excited:`Still buzzing from my ${exp} with ${company}${roleClause}! 🎉`,
+    Reflective:`Taking a moment to reflect on my ${exp} with ${company}${roleClause}.`,
+    Humble:`I was lucky enough to join ${expArticle} ${exp} with ${company}${roleClause} — and I left with more questions and ideas than I arrived with.`,
+    Confident:`This week I invested in my growth: ${expArticle} ${exp} with ${company}${roleClause}.`,
+    Casual:`So I got to spend some time on ${expArticle} ${exp} with ${company}${roleClause}${locClause}, and it was a good one.`,
+    "Story-driven":`A few days ago${whenClause?whenClause:""} I walked into ${company} for ${expArticle} ${exp}${roleClause}, not entirely sure what to expect.`,
+  };
+
+  const context = did ? `During it, I got to ${lc(did)}.` : "";
+  const learningLine = learned ? `One of the biggest takeaways for me was ${lc(learned)}.` : "";
+  const relevanceLine = relevance ? `It was especially valuable to see how this connects to ${lc(relevance)}.` : "";
+  const momentLine = moment ? `A favorite moment: ${lc(moment)}.` : "";
+  const thanksTargets = sentenceList([thanks, people].filter(Boolean));
+  const gratitude = (thanks || people)
+    ? `Thank you to ${thanksTargets || company} for making it such a welcoming and informative experience.`
+    : `Thank you to ${company} for a welcoming and informative experience.`;
+  const closing = `Excited to keep learning and building from here.`;
+
+  // A grounded reflective paragraph for fuller/professional posts — built from the user's own inputs, not filler.
+  const reflection = (learned && relevance)
+    ? `Seeing ${company}'s approach up close made the link between ${lc(learned)} and ${lc(relevance)} far more concrete than it ever felt on paper.`
+    : learned
+      ? `Seeing how ${company} works day to day made ${lc(learned)} click in a way that reading about the field never quite did.`
+      : `Seeing how ${company} operates up close was a valuable, hands-on complement to everything I had learned in the classroom.`;
+
+  // Depth: tone sets the baseline length; an explicit length variant can override it.
+  let depth = TONE_DEPTH[tone] ?? 2;
+  if(variant==="short") depth = 1;
+  else if(variant==="polished" || variant==="professional") depth = 3;
+  else if(variant==="personal") depth = Math.max(depth, 2);
+
+  const P = d.platform;
+  let parts = [];
+
+  if(P==="x"){
+    parts.push(openers[tone]||openers.Professional);
+    const punch = learned ? `Biggest takeaway: ${lc(learned)}` : (moment||context);
+    if(punch) parts.push(punch);
+    parts.push(`Thanks ${company} 🙏`);
+  } else {
+    parts.push(openers[tone]||openers.Professional);
+    if(depth <= 1){
+      const one = [learningLine, context, momentLine].find(Boolean);
+      if(one) parts.push(one);
+      parts.push(closing);
+    } else if(depth === 2){
+      const body = [context, learningLine, relevanceLine].filter(Boolean).join(" ");
+      if(body) parts.push(body);
+      if(variant==="personal" && momentLine) parts.push(momentLine);
+      parts.push(gratitude);
+      parts.push(closing);
+    } else {
+      // depth 3 — full, multi-paragraph (Professional / Reflective / Story-driven tones, or polished/professional variants)
+      if(context) parts.push(context);
+      if(learningLine) parts.push(learningLine + (relevanceLine ? " "+relevanceLine : ""));
+      parts.push(reflection);
+      if(variant==="personal" && momentLine) parts.push(momentLine);
+      parts.push(gratitude);
+      parts.push(closing);
+    }
+  }
+
+  // Chain-style: with a coherent tone-driven post in hand, layer style traits on top
+  // as targeted transforms. Traits that would degrade coherence are skipped silently.
+  if(d.style && P !== "x"){
+    parts = stylizeParts(parts, clauses, d.style);
+  }
+
+  // Professional tone/variant reads clean — no casual emoji, UNLESS active style asks for emojis.
+  if((variant==="professional" || tone==="Professional") && !d.style?.traits?.emojis){
+    parts = parts.map(p=>p.replace(/🎉|🙏/g,"").trim());
+  }
+
+  const tagLine = tags.length ? "\n\n"+tags.join(" ") : "";
+  let text;
+  if(P==="x"){
+    text = polish(parts.filter(Boolean).join(" "));
+    if(text.length>270) text = text.slice(0,267).trim()+"…";
+    if(tags.length){ const tl=" "+tags.slice(0,2).join(" "); if((text+tl).length<=280) text+=tl; }
+  } else if(P==="facebook"){
+    text = polish(parts.filter(Boolean).join("\n\n"));
+    if(tags.length) text += "\n\n"+tags.slice(0,3).join(" ");
+  } else {
+    text = polish(parts.filter(Boolean).join("\n\n")) + tagLine;
+  }
+  text = applyStyle(text, d.style, d.platform);
+  text = grammarFix(text);
+  return {text, tags};
+}
+
+/* ---------- style transforms (chain-style, applied AFTER tone build) ---------- */
+// Take a coherent, tone-generated `parts` array and layer style traits on top as
+// targeted edits. Order is deliberate: content-shape transforms first (list),
+// then opener rewrites (hook), then prepends (contrarian, leadWithNumber), then
+// gratitude expansion and close. Each transform is guarded so it skips itself
+// when the material would produce an incoherent result.
+function stylizeParts(parts, clauses, style){
+  const T = style.traits || {};
+  if(!Object.keys(T).length) return parts;
+  const {company, exp, expArticle, learned, people, moment, thanks, when, lc, cap} = clauses;
+  const clip = (x)=> x ? String(x).replace(/\.+$/,"") : "";
+  const isGrat = (p)=> /^(thank you|thanks|enormous thanks|huge thanks|grateful|truly grateful)/i.test(p||"");
+  let out = [...parts];
+
+  // ---- 1. LIST — convert middle body to a numbered list, only when there are
+  //         at least two distinct sentence-level ideas to list. Otherwise skip
+  //         so we don't produce a one-item "list" that reads awkwardly.
+  if(T.list){
+    const gratIdx = out.findIndex(isGrat);
+    if(gratIdx > 1){
+      const bodyParts = out.slice(1, gratIdx);
+      const raw = bodyParts.flatMap(p => p.split(/(?<=[.!?])\s+/)).map(s => s.trim()).filter(s => s.length > 10);
+      if(raw.length >= 2){
+        const cleaned = raw.slice(0, 4).map(item => {
+          // Strip tone-based leading phrases so items read like standalone takeaways.
+          let it = item.replace(/^(during it,?\s*i got to |one of the biggest takeaways for me was |it was especially valuable to see how this connects to |a favorite moment:\s*|seeing (how )?[^.]+? made |that reframed how i think about )/i, "");
+          return cap(lc(clip(it)));
+        });
+        out.splice(1, gratIdx - 1,
+          `${cleaned.length} things I'm taking with me:`,
+          cleaned.map((it, i) => `${i+1}. ${it}.`).join("\n"),
+        );
+      }
+    }
+  }
+
+  // ---- 2. HOOK — shorten the opener only if it's long-winded (>10 words).
+  //         Short tone openers (Excited, Casual, Story-driven fragments) are
+  //         left alone so we don't clobber a good opener with a generic hook.
+  if(T.hook && out[0]){
+    const words = out[0].split(/\s+/).length;
+    if(words > 10){
+      if(learned){
+        out[0] = `Biggest lesson from my ${exp} at ${company}: ${lc(clip(learned))}.`;
+      } else if(moment){
+        out[0] = `${cap(lc(clip(moment)))} — that's what stuck from ${company}.`;
+      } else {
+        out[0] = `${cap(expArticle)} ${exp} at ${company}. Something to unpack.`;
+      }
+    }
+  }
+
+  // ---- 3. CONTRARIAN — prepend a flipping frame. Kept short so it complements
+  //         the tone-based opener rather than competing with it.
+  if(T.contrarian){
+    out.unshift(`Most people expect ${expArticle} ${exp} to be about polishing your résumé. Mine wasn't.`);
+  }
+
+  // ---- 4. LEAD WITH NUMBER — prepend a number-first beat sequence, but only
+  //         when we have at least two beats to make it feel intentional.
+  if(T.leadWithNumber){
+    const beats = [];
+    if(when) beats.push(when);
+    if(learned) beats.push("1 big lesson");
+    if(moment) beats.push("1 moment I won't forget");
+    if(beats.length >= 2){
+      out.unshift(beats.slice(0, 3).map(cap).join(". ") + ".");
+    }
+  }
+
+  // ---- 5. GRATITUDE HEAVY — replace the existing thanks line with a warmer,
+  //         more expansive version. If no gratitude line exists (shouldn't
+  //         happen with current tone builds, but be defensive), skip.
+  if(T.gratitudeHeavy){
+    const idx = out.findIndex(isGrat);
+    if(idx >= 0){
+      const targets = [thanks, people].filter(Boolean);
+      const list = targets.length === 0
+        ? ""
+        : targets.length === 1
+          ? targets[0]
+          : targets.slice(0,-1).join(", ") + " and " + targets[targets.length-1];
+      out[idx] = `Enormous thanks to ${list || `everyone at ${company}`} for making this such a generous, welcoming experience. Truly grateful for every conversation.`;
+    }
+  }
+
+  // ---- 6. CLOSE CTA — replace the close line with a question, unless the
+  //         current close already ends with a question mark.
+  if(T.closeCTA){
+    const last = out.length - 1;
+    if(!/[?]\s*$/.test((out[last] || "").trim())){
+      out[last] = `What's been your experience?`;
+    }
+  }
+
+  return out;
+}
+
+/* ---------- grammar cleanup ---------- */
+// Capitalizes sentence starts, pronoun "I" and its contractions, and paragraph/line starts.
+// Deliberately conservative — won't fix content, just capitalization and case.
+function grammarFix(text){
+  if(!text) return text;
+  let t = text;
+  // Pronoun "I" and common contractions (case-insensitive).
+  t = t.replace(/\bi\b/g, "I");
+  t = t.replace(/\bi(['''])(m|ve|ll|d|re|s)\b/gi, (_, ap, suf)=> "I"+ap+suf.toLowerCase());
+  // Capitalize first letter after sentence-ending punctuation.
+  t = t.replace(/([.!?]["'')\]]?\s+)([a-z])/g, (_, p, c)=> p + c.toUpperCase());
+  // Capitalize first letter of each line — handling hashtag/list line prefixes.
+  t = t.split(/\n/).map(line=>{
+    if(!line.trim()) return line;
+    if(/^\s*#/.test(line)) return line;
+    if(/^\s*\d+[.)]/.test(line)) return line.replace(/^(\s*\d+[.)]\s*)([a-z])/, (_,p,c)=>p+c.toUpperCase());
+    if(/^\s*[-•*]/.test(line))    return line.replace(/^(\s*[-•*]\s*)([a-z])/,   (_,p,c)=>p+c.toUpperCase());
+    return line.replace(/^(\s*)([a-z])/, (_,sp,c)=>sp+c.toUpperCase());
+  }).join("\n");
+  // First character of whole text.
+  t = t.replace(/^(\s*)([a-z])/, (_,sp,c)=>sp+c.toUpperCase());
+  return t;
+}
+
+/* ---------- style presets + import analyzer ---------- */
+const STYLE_PRESETS = [
+  {
+    key:"hook-short",
+    name:"Hook + short lines",
+    tagline:"Punchy first line, one-sentence paragraphs. The classic LinkedIn scroll-stopper.",
+    example:"3 years ago, I couldn't write a for-loop.\n\nLast month, I shipped a system used by 40,000 people.\n\nHere's what changed…",
+    traits:{shortLines:true, hook:true, avgSentence:"short", closeCTA:true},
+  },
+  {
+    key:"reflection",
+    name:"Reflection",
+    tagline:"Grounded, warmer, thoughtful. Reads like a journal entry.",
+    example:"There's a moment near the end of every project where the work stops being about the work. It becomes about the people you did it with.",
+    traits:{shortLines:false, hook:false, avgSentence:"long", closeCTA:false},
+  },
+  {
+    key:"listicle",
+    name:"Listicle",
+    tagline:"'3 things I learned from X.' Scannable bullets.",
+    example:"I just wrapped my externship at Northwind. 3 things I'm taking with me:\n\n1. Research shapes every decision.\n2. Feedback is a gift, not a verdict.\n3. Ship early, ship often.",
+    traits:{shortLines:true, hook:true, list:true, avgSentence:"short", closeCTA:true},
+  },
+  {
+    key:"gratitude",
+    name:"Gratitude / recap",
+    tagline:"Warm, generous with tags and thank-yous.",
+    example:"Wrapping up an unforgettable week with the team at Northwind. Huge thanks to Jordan, Priya, and the whole design crew for making it so welcoming.",
+    traits:{shortLines:false, hook:false, avgSentence:"medium", closeCTA:false, gratitudeHeavy:true},
+  },
+  {
+    key:"contrarian",
+    name:"Contrarian take",
+    tagline:"Sets up a common view, then flips it.",
+    example:"Everyone tells students to network more.\n\nI learned the opposite this month.",
+    traits:{shortLines:true, hook:true, contrarian:true, avgSentence:"short", closeCTA:true},
+  },
+  {
+    key:"data",
+    name:"Data-first",
+    tagline:"Leads with a number or a specific detail.",
+    example:"12 design reviews. 4 user interviews. 1 pretty humbling week at Northwind.",
+    traits:{shortLines:true, hook:true, leadWithNumber:true, avgSentence:"short", closeCTA:false},
+  },
+];
+
+// Analyze a pasted LinkedIn post and infer style traits from it.
+function analyzeStyle(text){
+  const t = (text||"").trim();
+  if(!t) return null;
+  const sentences = t.split(/[.!?]+/).map(s=>s.trim()).filter(Boolean);
+  const words = t.split(/\s+/).filter(Boolean);
+  const avgLen = sentences.length ? words.length/sentences.length : 0;
+  const emojiCount = (t.match(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu) || []).length;
+  const paras = t.split(/\n{2,}/).length;
+  const firstSentWords = sentences[0] ? sentences[0].split(/\s+/).length : 99;
+  return {
+    shortLines: paras >= 4 || (t.length>200 && paras/(t.length/200) > 1.2),
+    hook: firstSentWords <= 10,
+    avgSentence: avgLen < 10 ? "short" : avgLen < 18 ? "medium" : "long",
+    emojis: emojiCount >= 2,
+    list: /^\s*(\d+[.)]|[-•*])\s/m.test(t),
+    closeCTA: /\?\s*$/.test(t) || /what (do you|about you|would)/i.test(t.slice(-120)),
+    gratitudeHeavy: /(thank you|thanks to|grateful)/i.test(t),
+    contrarian: /(everyone|most people|conventional wisdom).{0,60}(but|however|actually|wrong)/i.test(t),
+    leadWithNumber: /^\s*\d/.test(t),
+  };
+}
+
+// Apply style traits as post-processing on the generated text.
+function applyStyle(text, style, platform){
+  if(!style || !style.traits || !text) return text;
+  const T = style.traits;
+  let out = text;
+  // Preserve any trailing hashtag block, apply transforms to body only.
+  const tagMatch = out.match(/\n\n(#\S+(?:\s+#\S+)*)\s*$/);
+  let tags = "";
+  if(tagMatch){ tags = "\n\n"+tagMatch[1]; out = out.slice(0, tagMatch.index); }
+
+  // Short-lines: split each paragraph so each sentence gets its own line.
+  // (closeCTA is handled earlier in stylizeParts — it's a content transform, not formatting.)
+  if(T.shortLines && platform!=="x"){
+    out = out.split(/\n{2,}/).map(para=>{
+      if(/^\s*(\d+[.)]|[-•*])\s/.test(para)) return para; // don't split existing lists
+      return para.split(/(?<=[.!?])\s+(?=[A-Z"'])/).join("\n\n");
+    }).join("\n\n");
+  }
+
+  return out + tags;
+}
+
+/* ---------- small components ---------- */
+function Section({title, children, right}){
+  return (
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="eyebrow">{title}</div>
+        {right}
+      </div>
+      {children}
+    </div>
+  );
+}
+function Field({label, children}){
+  return <div className="field mb-3"><label>{label}</label>{children}</div>;
+}
+
+/* ---------- draft persistence (best-effort) ---------- */
+const STORE_KEY="contactsheet.drafts.v1";
+function loadDrafts(){ try{const r=localStorage.getItem(STORE_KEY);return r?JSON.parse(r):[]}catch(e){return []} }
+function saveDrafts(list){ try{localStorage.setItem(STORE_KEY, JSON.stringify(list))}catch(e){} }
+
+/* ---------- AI providers (Llama local + cloud LLMs) ---------- */
+// Providers all speak either the Ollama chat API (local) or an OpenAI/Anthropic-compatible
+// chat API (cloud). Keys are stored per-provider in localStorage — browser-only, so treat
+// them as personal-development credentials, not production secrets.
+const AI_PROVIDERS = {
+  ollama: {
+    name:"Llama (local via Ollama) · free",
+    kind:"ollama",
+    needsKey:false, needsEndpoint:true,
+    defaultEndpoint:"http://localhost:11434",
+    defaultModel:"llama3.2",
+    models:["llama3.2","llama3.2:1b","llama3.1","llama3.1:70b","mistral","qwen2.5","phi3"],
+    setup:[
+      "Install Ollama from ollama.com",
+      "Pull a model: ollama pull llama3.2",
+      "Start with CORS enabled: OLLAMA_ORIGINS=* ollama serve",
+    ],
+  },
+  anthropic: {
+    name:"Claude (Anthropic) · paid",
+    kind:"anthropic",
+    needsKey:true, needsEndpoint:false,
+    defaultModel:"claude-haiku-4-5-20251001",
+    models:["claude-haiku-4-5-20251001","claude-sonnet-5","claude-opus-4-8","claude-fable-5"],
+    keyLabel:"Anthropic API key",
+    keyPlaceholder:"sk-ant-…",
+    keyLink:"https://console.anthropic.com/settings/keys",
+    setup:["Create a key at console.anthropic.com/settings/keys", "Haiku 4.5 is fastest & cheapest for this task"],
+  },
+  openai: {
+    name:"OpenAI GPT · paid",
+    kind:"openai",
+    needsKey:true, needsEndpoint:false,
+    defaultModel:"gpt-4o-mini",
+    models:["gpt-4o-mini","gpt-4o","gpt-4.1","gpt-4-turbo","gpt-3.5-turbo"],
+    keyLabel:"OpenAI API key",
+    keyPlaceholder:"sk-…",
+    keyLink:"https://platform.openai.com/api-keys",
+    endpoint:"https://api.openai.com/v1/chat/completions",
+    setup:["Create a key at platform.openai.com/api-keys", "gpt-4o-mini is very cheap and fast"],
+  },
+  deepseek: {
+    name:"DeepSeek · paid (cheap)",
+    kind:"openai",
+    needsKey:true, needsEndpoint:false,
+    defaultModel:"deepseek-chat",
+    models:["deepseek-chat","deepseek-reasoner"],
+    keyLabel:"DeepSeek API key",
+    keyPlaceholder:"sk-…",
+    keyLink:"https://platform.deepseek.com/api_keys",
+    endpoint:"https://api.deepseek.com/chat/completions",
+    setup:["Create a key at platform.deepseek.com/api_keys", "Very cheap per token"],
+  },
+  groq: {
+    name:"Groq (Llama in the cloud) · free tier",
+    kind:"openai",
+    needsKey:true, needsEndpoint:false,
+    defaultModel:"llama-3.3-70b-versatile",
+    models:["llama-3.3-70b-versatile","llama-3.1-8b-instant","mixtral-8x7b-32768","gemma2-9b-it"],
+    keyLabel:"Groq API key",
+    keyPlaceholder:"gsk_…",
+    keyLink:"https://console.groq.com/keys",
+    endpoint:"https://api.groq.com/openai/v1/chat/completions",
+    setup:["Sign up at console.groq.com/keys — generous free tier", "Very fast inference — usually sub-second"],
+  },
+};
+
+const AI_STORE_KEY = "contactsheet.ai.v2";
+const AI_DEFAULTS = {enabled:false, provider:"ollama", model:"llama3.2", endpoint:"http://localhost:11434", keys:{}};
+function loadAi(){
+  try{
+    const stored = JSON.parse(localStorage.getItem(AI_STORE_KEY)||"null") || {};
+    const merged = {...AI_DEFAULTS, ...stored, keys:{...(stored.keys||{})}};
+    if(!AI_PROVIDERS[merged.provider]) merged.provider = "ollama";
+    return merged;
+  } catch(e){ return {...AI_DEFAULTS, keys:{}}; }
+}
+function saveAi(cfg){ try{localStorage.setItem(AI_STORE_KEY, JSON.stringify(cfg));}catch(e){} }
+
+function buildAiSystemPrompt(form, variant, style){
+  const platName = PLATFORMS[form.platform].name;
+  const platLimit = PLATFORMS[form.platform].limit;
+  const styleDesc = style
+    ? (style.source==="import"
+        ? `Match this reference post's voice, rhythm, and format:\n"""\n${(style.example||"").slice(0,600)}\n"""`
+        : `Follow this style: ${style.name}. ${style.tagline||""}${style.example?"\n\nReference example of that style:\n\"\"\"\n"+style.example+"\n\"\"\"":""}`)
+    : "No specific style — use the requested tone naturally.";
+  const varLine = ({
+    short:"Keep it noticeably shorter than a default post.",
+    polished:"Aim for a fuller, more polished multi-paragraph piece.",
+    personal:"Lean slightly more personal — include the favorite moment if provided.",
+    professional:"Lean more polished and professional; skip casual emoji.",
+    standard:"Use a natural default length for the platform.",
+  })[variant] || "";
+  return [
+`You are helping someone turn rough notes about a career experience into a polished, natural-sounding social media post.`,
+``,
+`STRICT RULES:`,
+`1. The user's inputs may contain misspellings, awkward phrasing, or full sentences where only a fragment was intended. Fix spelling and grammar. Interpret each field for its intent — e.g., if "people I met" reads "I met Dhruv", extract just the name(s), don't quote the whole sentence.`,
+`2. Do NOT invent facts, names, numbers, dates, or details that are not in the input. If a field is empty, omit that idea entirely — never fabricate.`,
+`3. Do NOT include the author's own name in the post body — the platform shows their identity separately.`,
+`4. Do NOT use em dashes excessively (one at most).`,
+`5. Do NOT open with "I'm excited to announce" or other corporate clichés. Keep it authentic, understated, and specific.`,
+`6. Do NOT include preamble like "Here's your post:" — return ONLY the finished post text.`,
+`7. Do NOT wrap the output in quotes or code fences.`,
+``,
+`PLATFORM: ${platName} (character limit: ${platLimit.toLocaleString()})`,
+`TONE: ${form.tone||"Professional"}`,
+`LENGTH: ${varLine}`,
+`STYLE: ${styleDesc}`,
+    ].join("\n");
+}
+
+function buildAiUserPrompt(form){
+  const fields = [
+    ["Company / organization", form.company],
+    ["Experience type", form.experienceType],
+    ["Program / role", form.program],
+    ["Date / timeframe", form.date],
+    ["Location", form.location],
+    ["What they did", form.whatYouDid],
+    ["What they learned", form.whatYouLearned],
+    ["People / teams they met", form.people],
+    ["Favorite moment", form.favoriteMoment],
+    ["Career relevance", form.careerRelevance],
+    ["Callout / thanks to", form.callout],
+  ].filter(([_,v])=> (v||"").trim().length>0);
+  const lines = fields.map(([k,v])=>`- ${k}: ${v.trim()}`);
+  return `Here are the raw inputs (some may be misspelled or awkwardly phrased — clean them up, don't quote them verbatim):\n\n${lines.join("\n")}\n\nWrite the finished post now. Output only the post text.`;
+}
+
+function cleanAiResponse(text){
+  if(!text) return "";
+  let t = String(text).trim();
+  // Strip common conversational preambles.
+  t = t.replace(/^(here'?s?|here is|here are|sure[,!]?|of course[,!]?|okay[,!]?|got it[,!]?|absolutely[,!]?)\s+(a\s+)?(polished|the|your|revised|updated|improved|refined)?\s*(version|post|draft|linkedin post|social media post)?[:!]?\s*/i, "");
+  // Strip code fences.
+  t = t.replace(/^```(?:\w+)?\n?/, "").replace(/\n?```\s*$/, "");
+  // Strip surrounding matched quotes.
+  if((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))){
+    t = t.slice(1,-1);
+  }
+  return t.trim();
+}
+
+async function callOllama({endpoint, model, system, user, signal}){
+  const url = (endpoint||"http://localhost:11434").replace(/\/+$/,"") + "/api/chat";
+  const resp = await fetch(url, {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({
+      model,
+      messages:[{role:"system",content:system},{role:"user",content:user}],
+      stream:false,
+      options:{temperature:0.7},
+    }),
+    signal,
+  });
+  if(!resp.ok){
+    const t = await resp.text().catch(()=>"");
+    throw new Error(`Ollama ${resp.status}: ${(t || resp.statusText).slice(0,140)}`);
+  }
+  const data = await resp.json();
+  return data?.message?.content || data?.response || "";
+}
+
+async function callAnthropic({apiKey, model, system, user, signal}){
+  if(!apiKey) throw new Error("Missing API key");
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1024,
+      system,
+      messages: [{role:"user", content: user}],
+    }),
+    signal,
+  });
+  if(!resp.ok){
+    const t = await resp.text().catch(()=>"");
+    throw new Error(`Anthropic ${resp.status}: ${(t || resp.statusText).slice(0,140)}`);
+  }
+  const data = await resp.json();
+  return (data?.content||[]).map(b=>b?.text||"").join("") || "";
+}
+
+// Works for OpenAI, DeepSeek, Groq, and any OpenAI-compatible chat completions endpoint.
+async function callOpenAiCompatible({url, apiKey, model, system, user, signal}){
+  if(!apiKey) throw new Error("Missing API key");
+  const resp = await fetch(url, {
+    method:"POST",
+    headers:{
+      "Authorization":"Bearer "+apiKey,
+      "Content-Type":"application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages:[{role:"system",content:system},{role:"user",content:user}],
+      temperature: 0.7,
+    }),
+    signal,
+  });
+  if(!resp.ok){
+    const t = await resp.text().catch(()=>"");
+    throw new Error(`${resp.status}: ${(t || resp.statusText).slice(0,140)}`);
+  }
+  const data = await resp.json();
+  return data?.choices?.[0]?.message?.content || "";
+}
+
+async function polishWithAi({provider, model, apiKey, endpoint, form, variant, style, signal}){
+  const P = AI_PROVIDERS[provider];
+  if(!P) throw new Error("Unknown provider: "+provider);
+  const system = buildAiSystemPrompt(form, variant, style);
+  const user   = buildAiUserPrompt(form);
+  let raw;
+  if(P.kind === "ollama"){
+    raw = await callOllama({endpoint, model, system, user, signal});
+  } else if(P.kind === "anthropic"){
+    raw = await callAnthropic({apiKey, model, system, user, signal});
+  } else {
+    raw = await callOpenAiCompatible({url: P.endpoint, apiKey, model, system, user, signal});
+  }
+  const cleaned = cleanAiResponse(raw);
+  if(!cleaned) throw new Error("Empty response from "+P.name);
+  return cleaned;
+}
+
+async function testProvider({provider, model, apiKey, endpoint, signal}){
+  const P = AI_PROVIDERS[provider];
+  if(!P) throw new Error("Unknown provider");
+  if(P.kind === "ollama"){
+    const url = (endpoint||P.defaultEndpoint).replace(/\/+$/,"") + "/api/tags";
+    const resp = await fetch(url, {signal});
+    if(!resp.ok) throw new Error(`Ollama ${resp.status} — is it running?`);
+    const data = await resp.json();
+    const installed = (data?.models||[]).map(m=>m.name);
+    if(!installed.length) throw new Error("No models installed. Run: ollama pull "+model);
+    const found = installed.some(n => n===model || n.startsWith(model+":") || model.startsWith(n));
+    if(!found) throw new Error(`model "${model}" not installed. Installed: ${installed.slice(0,3).join(", ")}`);
+    return `connected · ${model}`;
+  }
+  // Cloud providers: send a tiny chat completion as the probe.
+  const system = "You are a test. Reply with exactly: pong";
+  const user   = "ping";
+  const raw = P.kind === "anthropic"
+    ? await callAnthropic({apiKey, model, system, user, signal})
+    : await callOpenAiCompatible({url: P.endpoint, apiKey, model, system, user, signal});
+  if(!raw) throw new Error("Empty response");
+  return `connected · ${model}`;
+}
+
+/* ---------- main app ---------- */
+function App(){
+  const emptyForm = {
+    platform:"linkedin", authorName:"", company:"", experienceType:"", date:"", location:"",
+    program:"", whatYouDid:"", whatYouLearned:"", people:"", favoriteMoment:"",
+    careerRelevance:"", callout:"", tone:"Professional",
+  };
+  const [form,setForm]=useState(emptyForm);
+  const [photos,setPhotos]=useState([]); // {id,name,url,caption,isHero,order,warn}
+  const [variant,setVariant]=useState("standard");
+  const [genText,setGenText]=useState("");
+  const [tags,setTags]=useState([]);
+  const [drafts,setDrafts]=useState(loadDrafts());
+  const [toast,setToast]=useState("");
+  const [view,setView]=useState("create"); // style | create | drafts
+  const [drag,setDrag]=useState(false);
+  const [activeStyle,setActiveStyle]=useState(null); // {key, name, traits, source:"preset"|"import", example?}
+  const [ai,setAi]=useState(loadAi());
+  const [aiStatus,setAiStatus]=useState({state:"idle", msg:""}); // idle | loading | ok | error
+  const [showKey,setShowKey]=useState(false); // visual reveal only; never persisted
+  const aiAbort=useRef(null);
+  const templateText=useRef("");
+  useEffect(()=>{ saveAi(ai); },[ai]);
+  // Never leave a key visible after switching providers or turning AI off.
+  useEffect(()=>{ setShowKey(false); },[ai.provider, ai.enabled]);
+  const fileRef=useRef();
+  const toastTimer=useRef();
+
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const flash=(m)=>{setToast(m); clearTimeout(toastTimer.current); toastTimer.current=setTimeout(()=>setToast(""),1900);};
+
+  /* photo handling */
+  const addFiles=useCallback((files)=>{
+    const arr=[...files];
+    arr.forEach((file,i)=>{
+      const okType=/(jpe?g|png|webp|heic|heif)$/i.test(file.name)||file.type.startsWith("image/");
+      const warn = file.size>8*1024*1024 ? "Large file (>8MB)" : (/(heic|heif)$/i.test(file.name)? "HEIC may not preview" : "");
+      const reader=new FileReader();
+      reader.onload=(e)=>{
+        setPhotos(p=>[...p,{
+          id:Date.now()+"-"+Math.random().toString(36).slice(2,7),
+          name:file.name, url:e.target.result, caption:"",
+          isHero:p.length===0, order:p.length, warn: okType?warn:"Unsupported format",
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+  },[]);
+  const onDrop=(e)=>{e.preventDefault();setDrag(false); if(e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);};
+  const removePhoto=(id)=>setPhotos(p=>{
+    let np=p.filter(x=>x.id!==id).map((x,i)=>({...x,order:i}));
+    if(!np.some(x=>x.isHero)&&np.length) np[0].isHero=true;
+    return np;
+  });
+  const setHero=(id)=>setPhotos(p=>p.map(x=>({...x,isHero:x.id===id})));
+  const move=(id,dir)=>setPhotos(p=>{
+    const idx=p.findIndex(x=>x.id===id); const j=idx+dir;
+    if(j<0||j>=p.length) return p;
+    const np=[...p]; [np[idx],np[j]]=[np[j],np[idx]];
+    return np.map((x,i)=>({...x,order:i}));
+  });
+  const setCaption=(id,v)=>setPhotos(p=>p.map(x=>x.id===id?{...x,caption:v}:x));
+
+  /* generation */
+  const doGenerate=()=>{
+    const {text,tags}=generate({...form, style:activeStyle}, variant);
+    templateText.current = text;
+    setGenText(text); setTags(tags);
+    flash("Draft generated");
+  };
+
+  const doTestAi = async () => {
+    setAiStatus({state:"loading", msg:"testing…"});
+    try{
+      const msg = await testProvider({
+        provider: ai.provider,
+        model: ai.model,
+        apiKey: ai.keys?.[ai.provider] || "",
+        endpoint: ai.endpoint,
+      });
+      setAiStatus({state:"ok", msg});
+      flash("Connected");
+    }catch(e){
+      setAiStatus({state:"error", msg: e.message || "connection failed"});
+    }
+  };
+
+  const changeProvider = (nextProvider) => {
+    const P = AI_PROVIDERS[nextProvider];
+    setAi({
+      ...ai,
+      provider: nextProvider,
+      model: P.defaultModel,
+      endpoint: P.needsEndpoint ? (P.defaultEndpoint || ai.endpoint) : ai.endpoint,
+    });
+    setAiStatus({state:"idle", msg:""});
+  };
+  // live sync (template, synchronous) — any change to form fields, tone, platform,
+  // variant, or style re-runs the template generator so the user gets instant feedback.
+  // Note: this overwrites manual edits to the draft textarea when a form field changes.
+  useEffect(()=>{
+    const hasContent = Object.entries(form).some(([k,v])=>
+      k!=="platform" && k!=="tone" && typeof v==="string" && v.trim().length>0
+    );
+    if(!hasContent){ setGenText(""); setTags([]); templateText.current=""; return; }
+    const {text, tags:t} = generate({...form, style:activeStyle}, variant);
+    templateText.current = text;
+    setGenText(text); setTags(t);
+  },[form, variant, activeStyle]);
+
+  // AI polish (Llama via Ollama) — debounced, replaces the template output with a
+  // natural-language rewrite. Aborts on further input to avoid stale replacements.
+  // Only overwrites the draft if the user hasn't manually edited it since the
+  // template ran (compares against templateText.current).
+  useEffect(()=>{
+    if(!ai.enabled) return;
+    const hasContent = Object.entries(form).some(([k,v])=>
+      k!=="platform" && k!=="tone" && typeof v==="string" && v.trim().length>0
+    );
+    if(!hasContent) return;
+    if(aiAbort.current) aiAbort.current.abort();
+    const ac = new AbortController();
+    aiAbort.current = ac;
+    setAiStatus({state:"loading", msg:""});
+    const timer = setTimeout(async ()=>{
+      try{
+        const polished = await polishWithAi({
+          provider: ai.provider,
+          model: ai.model,
+          apiKey: ai.keys?.[ai.provider] || "",
+          endpoint: ai.endpoint,
+          form, variant, style:activeStyle,
+          signal: ac.signal,
+        });
+        // Only replace if user hasn't manually edited since template ran.
+        setGenText(cur => cur === templateText.current ? polished : cur);
+        setAiStatus({state:"ok", msg:""});
+      }catch(e){
+        if(e.name==="AbortError") return;
+        setAiStatus({state:"error", msg: e.message || String(e)});
+      }
+    }, 1100);
+    return ()=>{ clearTimeout(timer); ac.abort(); };
+  },[form, variant, activeStyle, ai]);
+
+  const count=genText.length;
+  const limit=PLATFORMS[form.platform].limit;
+  const over=count>limit;
+
+  /* copy/export */
+  const copy=(txt,msg)=>{navigator.clipboard?.writeText(txt).then(()=>flash(msg||"Copied")).catch(()=>flash("Copy failed"));};
+  const download=(content,filename,type="text/plain")=>{
+    const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
+  };
+  const exportPackage=()=>{
+    const pkg={
+      platform:form.platform, generatedAt:new Date().toISOString(),
+      post:genText, hashtags:tags, details:form,
+      photos:photos.map(p=>({name:p.name,caption:p.caption,isHero:p.isHero,order:p.order})),
+    };
+    download(JSON.stringify(pkg,null,2),`contactsheet-${form.platform}-package.json`,"application/json");
+    flash("Package downloaded");
+  };
+
+  /* drafts */
+  const saveCurrent=()=>{
+    if(!genText){flash("Generate a post first");return;}
+    const now=new Date().toISOString();
+    const title=(form.company? form.company+" — ":"")+PLATFORMS[form.platform].name;
+    const draft={
+      id:Date.now()+"", title, platform:form.platform,
+      form:{...form}, generatedText:genText, editedText:genText, tags,
+      photos:photos.map(p=>({name:p.name,url:p.url,caption:p.caption,isHero:p.isHero,order:p.order})),
+      createdAt:now, updatedAt:now,
+    };
+    const next=[draft,...drafts]; setDrafts(next); saveDrafts(next); flash("Draft saved");
+  };
+  const restore=(d)=>{
+    setForm({...emptyForm,...d.form});
+    setGenText(d.editedText||d.generatedText||""); setTags(d.tags||[]);
+    setPhotos((d.photos||[]).map((p,i)=>({...p,id:Date.now()+"-"+i})));
+    setView("create"); flash("Draft restored");
+  };
+  const duplicate=(d)=>{const copy={...d,id:Date.now()+"",title:d.title+" (copy)",createdAt:new Date().toISOString()};const n=[copy,...drafts];setDrafts(n);saveDrafts(n);flash("Duplicated");};
+  const del=(id)=>{const n=drafts.filter(x=>x.id!==id);setDrafts(n);saveDrafts(n);flash("Deleted");};
+
+  const sortedPhotos=[...photos].sort((a,b)=>a.order-b.order);
+
+  /* ---------- render ---------- */
+  return (
+    <div className="min-h-screen">
+      {/* top bar */}
+      <header className="sticky top-0 z-40 bg-[var(--bg)]/85 backdrop-blur border-b" style={{borderColor:"var(--line)"}}>
+        <div className="max-w-[1400px] mx-auto px-5 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="filmstrip-logo font-mono text-[10px] tracking-widest px-2 py-1 rounded text-white" style={{background:"#1c2128"}}>▦ ▦ ▦</div>
+            <div>
+              <div className="font-display text-[19px] font-semibold leading-none">Contact&nbsp;Sheet</div>
+              <div className="eyebrow mt-1">Experiences → posts</div>
+            </div>
+          </div>
+          <nav className="flex items-center gap-1 bg-white rounded-xl p-1 border" style={{borderColor:"var(--line)"}}>
+            <div className={"tab "+(view==="style"?"active":"")} onClick={()=>setView("style")}>
+              Style {activeStyle && <span className="font-mono text-[11px] opacity-70">· {activeStyle.name}</span>}
+            </div>
+            <div className={"tab "+(view==="create"?"active":"")} onClick={()=>setView("create")}>Create</div>
+            <div className={"tab "+(view==="drafts"?"active":"")} onClick={()=>setView("drafts")}>
+              Drafts {drafts.length>0 && <span className="font-mono text-[11px] opacity-70">({drafts.length})</span>}
+            </div>
+          </nav>
+        </div>
+      </header>
+
+      {view==="drafts" ? (
+        <DraftsView drafts={drafts} onRestore={restore} onDup={duplicate} onDel={del} onNew={()=>{setForm(emptyForm);setPhotos([]);setGenText("");setView("create");}}/>
+      ) : view==="style" ? (
+        <StyleView activeStyle={activeStyle} onPick={(s)=>{setActiveStyle(s); flash(s?`Style set: ${s.name}`:"Style cleared"); setView("create");}} onSkip={()=>{setActiveStyle(null); flash("Using default style"); setView("create");}}/>
+      ) : (
+      <main className="max-w-[1400px] mx-auto px-5 py-6 grid gap-5" style={{gridTemplateColumns:"minmax(320px,380px) minmax(0,1fr) minmax(220px,300px)"}}>
+
+        {/* ---- LEFT: inputs ---- */}
+        <div className="card p-5 h-fit">
+          <Section title="AI polish · optional">
+            <label className="flex items-center gap-2 cursor-pointer text-[13.5px] select-none">
+              <input type="checkbox" checked={ai.enabled} onChange={e=>setAi({...ai, enabled:e.target.checked})}/>
+              <span>✨ Improve draft with AI</span>
+            </label>
+            {ai.enabled && (() => {
+              const P = AI_PROVIDERS[ai.provider];
+              const currentKey = ai.keys?.[ai.provider] || "";
+              return (
+                <div className="mt-3 space-y-2">
+                  <Field label="Select AI model">
+                    <select value={ai.provider} onChange={e=>changeProvider(e.target.value)}>
+                      {Object.entries(AI_PROVIDERS).map(([k,p])=>(
+                        <option key={k} value={k}>{p.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Model version">
+                    <select value={ai.model} onChange={e=>setAi({...ai, model:e.target.value})}>
+                      {P.models.map(m=><option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </Field>
+                  {P.needsKey && (
+                    <Field label={P.keyLabel}>
+                      <div className="relative">
+                        <input
+                          type={showKey ? "text" : "password"}
+                          value={currentKey}
+                          onChange={e=>setAi({...ai, keys:{...ai.keys, [ai.provider]: e.target.value}})}
+                          placeholder={P.keyPlaceholder}
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck="false"
+                          data-1p-ignore="true"
+                          data-lpignore="true"
+                          data-form-type="other"
+                          style={{paddingRight:"56px", fontFamily:"'IBM Plex Mono',monospace", letterSpacing: showKey?"0":"1px"}}
+                        />
+                        <button
+                          type="button"
+                          onClick={()=>setShowKey(s=>!s)}
+                          className="absolute top-1/2 -translate-y-1/2 font-mono text-[10.5px] hover:text-[var(--indigo)]"
+                          style={{right:"10px", color:"var(--muted)"}}
+                          title={showKey ? "Hide key" : "Show key"}
+                        >{showKey ? "hide" : "show"}</button>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] mt-1" style={{color:"var(--muted)"}}>
+                        <span>Get a key at <a href={P.keyLink} target="_blank" rel="noopener noreferrer" className="underline hover:text-[var(--indigo)]">{P.keyLink.replace(/^https?:\/\//,"")}</a></span>
+                        {currentKey && (
+                          <button
+                            type="button"
+                            className="font-medium hover:text-red-600"
+                            onClick={()=>{
+                              setAi({...ai, keys:{...ai.keys, [ai.provider]:""}});
+                              setShowKey(false);
+                              flash("Key cleared");
+                            }}
+                          >Clear key</button>
+                        )}
+                      </div>
+                    </Field>
+                  )}
+                  {P.needsEndpoint && (
+                    <Field label="Ollama URL">
+                      <input value={ai.endpoint} onChange={e=>setAi({...ai, endpoint:e.target.value})} placeholder={P.defaultEndpoint}/>
+                    </Field>
+                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button className="btn btn-ghost" style={{padding:"6px 12px", fontSize:12}} onClick={doTestAi} disabled={P.needsKey && !currentKey}>Test connection</button>
+                    <span className="font-mono text-[11px]" style={{color: aiStatus.state==="error"?"#c94040": aiStatus.state==="ok"?"#2f7d3a":"var(--muted)"}}>
+                      {aiStatus.state==="loading" ? "…" : aiStatus.state==="ok" ? "✓ "+(aiStatus.msg||"ok") : aiStatus.state==="error" ? "✗ "+aiStatus.msg : "idle"}
+                    </span>
+                  </div>
+                  <details className="text-[11.5px] mt-2">
+                    <summary className="cursor-pointer" style={{color:"var(--muted)"}}>Setup instructions</summary>
+                    <ol className="mt-1.5 pl-5 list-decimal space-y-1" style={{color:"var(--muted)"}}>
+                      {P.setup.map((s,i)=>(<li key={i}>{s}</li>))}
+                    </ol>
+                  </details>
+                  {P.needsKey && (
+                    <p className="text-[10.5px] mt-2" style={{color:"var(--muted)"}}>
+                      Keys are stored only in this browser. Don't paste production keys.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+          </Section>
+
+          <Section title="Platform">
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(PLATFORMS).map(([k,p])=>(
+                <button key={k} onClick={()=>set("platform",k)}
+                  className={"btn "+(form.platform===k?"btn-ghost on":"btn-ghost")}
+                  style={{justifyContent:"flex-start"}}>
+                  <span className="font-mono text-[11px] w-6 h-6 rounded flex items-center justify-center text-white shrink-0" style={{background:p.color}}>{p.tag}</span>
+                  {p.name}
+                </button>
+              ))}
+            </div>
+            <p className="text-[12.5px] mt-2.5" style={{color:"var(--muted)"}}>{PLATFORMS[form.platform].blurb}</p>
+          </Section>
+
+          <Section title="You">
+            <Field label="Your name">
+              <input value={form.authorName} onChange={e=>set("authorName",e.target.value)} placeholder="e.g. Alex Rivera"/>
+            </Field>
+          </Section>
+
+          <Section title="The experience">
+            <Field label="Company or organization">
+              <input value={form.company} onChange={e=>set("company",e.target.value)} placeholder="e.g. Northwind Studios"/>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Experience type">
+                <input value={form.experienceType} onChange={e=>set("experienceType",e.target.value)} placeholder="Externship"/>
+              </Field>
+              <Field label="Program / role">
+                <input value={form.program} onChange={e=>set("program",e.target.value)} placeholder="Design Fellowship"/>
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Date / timeframe">
+                <input value={form.date} onChange={e=>set("date",e.target.value)} placeholder="March 2026"/>
+              </Field>
+              <Field label="Location">
+                <input value={form.location} onChange={e=>set("location",e.target.value)} placeholder="Austin, TX"/>
+              </Field>
+            </div>
+          </Section>
+
+          <Section title="What happened">
+            <Field label="What you did">
+              <textarea value={form.whatYouDid} onChange={e=>set("whatYouDid",e.target.value)} placeholder="shadow the product team and sit in on design reviews"/>
+            </Field>
+            <Field label="What you learned">
+              <textarea value={form.whatYouLearned} onChange={e=>set("whatYouLearned",e.target.value)} placeholder="how much research shapes a single design decision"/>
+            </Field>
+            <Field label="People / teams you met">
+              <input value={form.people} onChange={e=>set("people",e.target.value)} placeholder="the UX research team"/>
+            </Field>
+            <Field label="Favorite moment">
+              <input value={form.favoriteMoment} onChange={e=>set("favoriteMoment",e.target.value)} placeholder="presenting an idea and getting real feedback"/>
+            </Field>
+            <Field label="Career relevance">
+              <input value={form.careerRelevance} onChange={e=>set("careerRelevance",e.target.value)} placeholder="the product design path I want to pursue"/>
+            </Field>
+            <Field label="Callout or thank-you">
+              <input value={form.callout} onChange={e=>set("callout",e.target.value)} placeholder="Jordan and the whole design team"/>
+            </Field>
+          </Section>
+
+          <Section title="Tone">
+            <div className="flex flex-wrap gap-1.5">
+              {TONES.map(t=>(
+                <span key={t} className={"chip "+(form.tone===t?"on":"")} onClick={()=>set("tone",t)}>{t}</span>
+              ))}
+            </div>
+            <p className="text-[12px] mt-2" style={{color:"var(--muted)"}}>
+              Tone also sets length — <span style={{color:"var(--ink)"}}>Professional</span>, Reflective & Story-driven run longer; Casual & Excited stay tight.
+            </p>
+          </Section>
+
+          <button className="btn btn-primary w-full mt-1" onClick={doGenerate}>Generate post ✦</button>
+        </div>
+
+        {/* ---- CENTER: generator + preview ---- */}
+        <div className="flex flex-col gap-5">
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="eyebrow">Draft · {PLATFORMS[form.platform].name}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {VARIANTS.map(v=>(
+                  <span key={v.key} className={"chip "+(variant===v.key?"on":"")} onClick={()=>setVariant(v.key)}>{v.label}</span>
+                ))}
+              </div>
+            </div>
+            {activeStyle ? (
+              <div className="flex items-center justify-between mb-3 px-3 py-2 rounded-lg" style={{background:"#eef1f6", border:"1px solid #dde3ec"}}>
+                <div className="text-[12.5px]">
+                  <span className="font-mono text-[10.5px]" style={{color:"var(--muted)"}}>STYLE ·</span>{" "}
+                  <span className="font-semibold">{activeStyle.name}</span>
+                  <span style={{color:"var(--muted)"}}> — shaping the format of this draft</span>
+                </div>
+                <div className="flex gap-3 text-[12px]">
+                  <button className="hover:text-[var(--indigo)] font-medium" onClick={()=>setView("style")}>Change</button>
+                  <button className="hover:text-red-600" style={{color:"var(--muted)"}} onClick={()=>{setActiveStyle(null); flash("Style cleared");}}>Clear</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between mb-3 px-3 py-2 rounded-lg" style={{background:"#fbfcfd", border:"1px dashed var(--line)"}}>
+                <div className="text-[12.5px]" style={{color:"var(--muted)"}}>
+                  <span className="font-mono text-[10.5px]">STYLE ·</span> Default — pick a style or import one to shape the format.
+                </div>
+                <button className="text-[12px] font-medium hover:text-[var(--indigo)]" onClick={()=>setView("style")}>Choose style →</button>
+              </div>
+            )}
+
+            {genText ? (
+              <>
+                <textarea
+                  className="w-full font-[Inter] text-[15px] leading-relaxed p-4 rounded-xl border"
+                  style={{borderColor:"var(--line)",minHeight:"260px",resize:"vertical",whiteSpace:"pre-wrap"}}
+                  value={genText} onChange={e=>setGenText(e.target.value)}/>
+                <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
+                  <span className={"font-mono text-[12px] flex items-center gap-2 "+(over?"text-red-600 font-semibold":"")} style={{color:over?"":"var(--muted)"}}>
+                    {count.toLocaleString()} / {limit.toLocaleString()} chars {over?"· over limit":""}
+                    {ai.enabled && aiStatus.state==="loading" && <span className="text-[11px]" style={{color:"var(--indigo)"}}>· ✨ polishing…</span>}
+                    {ai.enabled && aiStatus.state==="ok" && <span className="text-[11px]" style={{color:"#2f7d3a"}}>· ✨ polished by {ai.model}</span>}
+                    {ai.enabled && aiStatus.state==="error" && <span className="text-[11px]" style={{color:"#c94040"}} title={aiStatus.msg}>· ✨ AI unreachable (using template)</span>}
+                  </span>
+                  <div className="flex gap-2 flex-wrap">
+                    <button className="btn btn-ghost" onClick={doGenerate}>↻ Regenerate</button>
+                    <button className="btn btn-ghost" onClick={()=>copy(tags.join(" "),"Hashtags copied")} disabled={!tags.length}>Copy #tags</button>
+                    <button className="btn btn-ghost" onClick={()=>download(genText,`post-${form.platform}.txt`)}>Download .txt</button>
+                    <button className="btn btn-primary" onClick={()=>copy(genText,"Post copied")}>Copy post</button>
+                    <a href={PLATFORMS[form.platform].url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost">Open {PLATFORMS[form.platform].name} ↗</a>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-16 px-6 rounded-xl" style={{background:"#fbfcfd",border:"1px dashed var(--line)"}}>
+                <div className="font-display text-[22px] font-medium mb-1">A blank frame, waiting.</div>
+                <p className="text-[14px] mb-4" style={{color:"var(--muted)"}}>Fill in a few details on the left, then generate a draft tailored to {PLATFORMS[form.platform].name}.</p>
+                <button className="btn btn-primary mx-auto" onClick={doGenerate}>Generate a starting draft</button>
+              </div>
+            )}
+
+            <div className="flex gap-2 mt-4 pt-4 border-t flex-wrap" style={{borderColor:"var(--line)"}}>
+              <button className="btn btn-ghost" onClick={saveCurrent}>◫ Save draft</button>
+              <button className="btn btn-ghost" onClick={exportPackage} disabled={!genText}>⇩ Export package</button>
+            </div>
+          </div>
+
+          {/* preview */}
+          {genText && <Preview platform={form.platform} text={genText} photos={sortedPhotos} authorName={form.authorName}/>}
+        </div>
+
+        {/* ---- RIGHT: film strip ---- */}
+        <div className="h-fit">
+          <Section title="Photo roll" right={sortedPhotos.length? <span className="font-mono text-[11px]" style={{color:"var(--muted)"}}>{sortedPhotos.length} frame{sortedPhotos.length>1?"s":""}</span>:null}>
+            <div
+              className={"dropzone p-4 text-center cursor-pointer "+(drag?"drag":"")}
+              onClick={()=>fileRef.current.click()}
+              onDragOver={e=>{e.preventDefault();setDrag(true);}}
+              onDragLeave={()=>setDrag(false)}
+              onDrop={onDrop}>
+              <div className="font-display text-[15px] font-medium">Drop photos here</div>
+              <div className="text-[12px] mt-0.5" style={{color:"var(--muted)"}}>or click to browse · JPG PNG WebP HEIC</div>
+              <input ref={fileRef} type="file" accept="image/*,.heic,.heif" multiple hidden onChange={e=>{addFiles(e.target.files);e.target.value="";}}/>
+            </div>
+
+            {sortedPhotos.length>0 && (
+              <div className="filmstrip mt-3 flex flex-col gap-2.5">
+                {sortedPhotos.map((p,i)=>(
+                  <div key={p.id} className={"frame "+(p.isHero?"hero":"")}>
+                    <div className="flex items-center justify-between px-2 pt-1.5">
+                      <span className="frame-num">{String(i+1).padStart(2,"0")}</span>
+                      {p.isHero && <span className="font-mono text-[9px] px-1.5 py-0.5 rounded" style={{background:"var(--amber)",color:"#1c1000"}}>HERO</span>}
+                    </div>
+                    {/(heic|heif)$/i.test(p.name) ? (
+                      <div className="h-28 flex items-center justify-center text-[11px]" style={{color:"#8b93a1"}}>HEIC preview<br/>not supported</div>
+                    ) : (
+                      <img src={p.url} alt={p.name} className="w-full h-28 object-cover"/>
+                    )}
+                    {p.warn && <div className="text-[10px] px-2 py-1" style={{color:"#f0a868"}}>⚠ {p.warn}</div>}
+                    <input
+                      className="w-full bg-transparent text-white/90 text-[11px] px-2 py-1 border-t border-white/10 placeholder:text-white/30"
+                      placeholder="caption…" value={p.caption} onChange={e=>setCaption(p.id,e.target.value)}/>
+                    <div className="flex items-center justify-between px-2 py-1.5 gap-1">
+                      <div className="flex gap-1">
+                        <button className="text-white/70 hover:text-white text-[13px] px-1" onClick={()=>move(p.id,-1)} disabled={i===0}>◀</button>
+                        <button className="text-white/70 hover:text-white text-[13px] px-1" onClick={()=>move(p.id,1)} disabled={i===sortedPhotos.length-1}>▶</button>
+                      </div>
+                      <div className="flex gap-2">
+                        {!p.isHero && <button className="text-[10px] text-white/60 hover:text-[var(--amber)]" onClick={()=>setHero(p.id)}>set hero</button>}
+                        <button className="text-[10px] text-white/60 hover:text-red-400" onClick={()=>removePhoto(p.id)}>remove</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {sortedPhotos.length===0 && (
+              <p className="text-[12.5px] mt-3 text-center" style={{color:"var(--muted)"}}>
+                Your photos become the roll — first frame or the one you mark <span style={{color:"var(--amber)"}}>hero</span> leads the post.
+              </p>
+            )}
+          </Section>
+        </div>
+      </main>
+      )}
+
+      {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
+
+/* ---------- platform preview ---------- */
+function Preview({platform, text, photos, authorName}){
+  const p=PLATFORMS[platform];
+  const hero=photos.find(x=>x.isHero)||photos[0];
+  const gallery=photos.slice(0,4);
+  const displayName = (authorName && authorName.trim()) || "Your Name";
+  const handle = (authorName && authorName.trim())
+    ? "@"+authorName.trim().toLowerCase().replace(/[^a-z0-9]+/g,"")
+    : "@yourhandle";
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="eyebrow">Preview · how it may look</div>
+        <a href={p.url} target="_blank" rel="noopener noreferrer"
+           className="font-mono text-[11px] px-2.5 py-1 rounded-md border hover:border-[var(--indigo)] hover:text-[var(--indigo)] transition"
+           style={{borderColor:"var(--line)",color:"var(--muted)"}}>
+          Open {p.name} ↗
+        </a>
+      </div>
+      <div className="mx-auto" style={{maxWidth:520,background:"#fff",border:"1px solid var(--line)",borderRadius:12,overflow:"hidden"}}>
+        {/* header row */}
+        <div className="flex items-center gap-3 p-3.5">
+          <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-mono text-[13px]" style={{background:p.color}}>{p.tag}</div>
+          <div className="leading-tight">
+            <div className="font-semibold text-[14px]">{displayName}</div>
+            <div className="text-[12px]" style={{color:"var(--muted)"}}>
+              {platform==="linkedin"?"Your headline · 1st":platform==="x"?handle:"Just now"}
+            </div>
+          </div>
+        </div>
+        {/* body — grammar-cleaned for display */}
+        <div className="px-3.5 pb-3 text-[14px] leading-relaxed" style={{whiteSpace:"pre-wrap"}}>{grammarFix(text)}</div>
+        {/* photos */}
+        {gallery.length>0 && (
+          gallery.length===1 ? (
+            !/(heic|heif)$/i.test(gallery[0].name)
+              ? <img src={gallery[0].url} className="w-full max-h-80 object-cover"/>
+              : null
+          ) : (
+            <div className="grid gap-0.5" style={{gridTemplateColumns: gallery.length>=3?"2fr 1fr":"1fr 1fr"}}>
+              {gallery.map((g,i)=>(
+                !/(heic|heif)$/i.test(g.name) ?
+                <img key={g.id} src={g.url} className="w-full object-cover" style={{height: gallery.length>=3&&i===0?"200px":"99px", gridRow: gallery.length>=3&&i===0?"span 2":"auto"}}/> : null
+              ))}
+            </div>
+          )
+        )}
+        <div className="flex items-center justify-between px-3.5 py-2.5 border-t text-[12px]" style={{borderColor:"var(--line)",color:"var(--muted)"}}>
+          <span>👍 💬 ↪</span>
+          <span className="font-mono">{text.length.toLocaleString()} chars</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- drafts view ---------- */
+function DraftsView({drafts,onRestore,onDup,onDel,onNew}){
+  return (
+    <main className="max-w-[900px] mx-auto px-5 py-8">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <div className="font-display text-[26px] font-semibold">Saved drafts</div>
+          <div className="eyebrow mt-1">{drafts.length} in this browser</div>
+        </div>
+        <button className="btn btn-primary" onClick={onNew}>+ New post</button>
+      </div>
+      {drafts.length===0 ? (
+        <div className="card p-14 text-center">
+          <div className="font-display text-[20px] font-medium mb-1">No drafts yet</div>
+          <p className="text-[14px]" style={{color:"var(--muted)"}}>Generate a post and hit “Save draft” to keep it here.</p>
+        </div>
+      ) : (
+        <div className="grid gap-3" style={{gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))"}}>
+          {drafts.map(d=>(
+            <div key={d.id} className="card p-4 flex flex-col">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="font-mono text-[11px] w-6 h-6 rounded flex items-center justify-center text-white" style={{background:PLATFORMS[d.platform].color}}>{PLATFORMS[d.platform].tag}</span>
+                <span className="font-semibold text-[14px] truncate">{d.title}</span>
+              </div>
+              <p className="text-[12.5px] mb-3 flex-1" style={{color:"var(--muted)",display:"-webkit-box",WebkitLineClamp:4,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{d.editedText||d.generatedText}</p>
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[10.5px]" style={{color:"var(--muted)"}}>{new Date(d.createdAt).toLocaleDateString()}</span>
+                <div className="flex gap-2 text-[12px]">
+                  <button className="hover:text-[var(--indigo)] font-medium" onClick={()=>onRestore(d)}>Open</button>
+                  <button className="hover:text-[var(--indigo)]" style={{color:"var(--muted)"}} onClick={()=>onDup(d)}>Dup</button>
+                  <button className="hover:text-red-600" style={{color:"var(--muted)"}} onClick={()=>onDel(d.id)}>Del</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </main>
+  );
+}
+
+/* ---------- style view ---------- */
+function StyleView({activeStyle, onPick, onSkip}){
+  const [importText,setImportText]=useState("");
+  const [importPreview,setImportPreview]=useState(null);
+  const analyze=()=>{
+    const traits = analyzeStyle(importText);
+    if(!traits){ setImportPreview(null); return; }
+    setImportPreview({key:"imported", name:"Imported style", source:"import", traits, example:importText.slice(0,240)});
+  };
+  const applyImport=()=>{ if(importPreview) onPick(importPreview); };
+  return (
+    <main className="max-w-[1100px] mx-auto px-5 py-8">
+      <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
+        <div>
+          <div className="font-display text-[26px] font-semibold">Choose a writing style</div>
+          <div className="eyebrow mt-1">Shapes how the generator formats your post</div>
+        </div>
+        <div className="flex gap-2 items-center">
+          {activeStyle && (
+            <span className="chip on" title="Currently active">Active: {activeStyle.name}</span>
+          )}
+          <button className="btn btn-ghost" onClick={onSkip}>Skip · use default</button>
+        </div>
+      </div>
+
+      <div className="eyebrow mb-2.5">Common LinkedIn styles</div>
+      <div className="grid gap-3 mb-8" style={{gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))"}}>
+        {STYLE_PRESETS.map(s=>{
+          const active = activeStyle && activeStyle.key===s.key;
+          return (
+            <div key={s.key} className={"card p-4 cursor-pointer transition "+(active?"":"hover:border-[var(--indigo)]")}
+                 style={active?{borderColor:"var(--indigo)", boxShadow:"0 0 0 3px rgba(51,65,92,.12)"}:{}}
+                 onClick={()=>onPick(s)}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="font-semibold text-[14px]">{s.name}</div>
+                {active && <span className="font-mono text-[10px] px-1.5 py-0.5 rounded" style={{background:"var(--indigo)",color:"#fff"}}>ACTIVE</span>}
+              </div>
+              <p className="text-[12.5px] mb-2.5" style={{color:"var(--muted)"}}>{s.tagline}</p>
+              <div className="text-[12.5px] p-2.5 rounded-md whitespace-pre-wrap leading-relaxed" style={{background:"#fbfcfd", border:"1px solid var(--line)", color:"var(--ink)"}}>{s.example}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="eyebrow mb-2.5">Or match a specific post</div>
+      <div className="card p-5">
+        <p className="text-[13.5px] mb-3" style={{color:"var(--muted)"}}>
+          Paste a LinkedIn post whose voice you want to match. We'll read its length, rhythm, and format — then generation will mirror them.
+        </p>
+        <textarea
+          className="w-full text-[14px] p-3 rounded-lg border"
+          style={{borderColor:"var(--line)", minHeight:"140px", resize:"vertical", fontFamily:"'Inter',sans-serif"}}
+          placeholder="Paste a post you admire here…"
+          value={importText}
+          onChange={e=>{setImportText(e.target.value); setImportPreview(null);}}
+        />
+        <div className="flex flex-wrap gap-2 mt-3 items-center">
+          <button className="btn btn-ghost" onClick={analyze} disabled={!importText.trim()}>Analyze</button>
+          <button className="btn btn-primary" onClick={applyImport} disabled={!importPreview}>Use this style</button>
+          {importPreview && (
+            <span className="font-mono text-[11px]" style={{color:"var(--muted)"}}>
+              detected · {Object.entries(importPreview.traits).filter(([,v])=>v && v!=="medium").map(([k,v])=>typeof v==="string"?`${k}:${v}`:k).join(" · ") || "no notable traits"}
+            </span>
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

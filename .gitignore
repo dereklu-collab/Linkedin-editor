@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor / tooling
+.vscode/
+.idea/
+*.swp
+*~
+
+# Claude Code local config (dev server launch config)
+.claude/
+
+# Logs / temp
+*.log
+node_modules/
