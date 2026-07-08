@@ -23,11 +23,9 @@
 
 ## Live demo
 
-If you enable **GitHub Pages** for this repo (Settings → Pages → Deploy from branch → `main` / root), the site will be live at:
+Enable **GitHub Pages** (Settings → Pages → Deploy from branch → `main` / root) and the site goes live at:
 
-```
-https://<your-username>.github.io/<repo-name>/
-```
+**https://dereklu-collab.github.io/Linkedin-editor/**
 
 `index.html` is at the repository root, so no configuration is needed.
 
