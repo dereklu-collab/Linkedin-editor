@@ -791,6 +791,7 @@ function App(){
   const [showKey,setShowKey]=useState(false); // visual reveal only; never persisted
   const aiAbort=useRef(null);
   const templateText=useRef("");
+  const lastAutoText=useRef(""); // last text set automatically (template OR AI polish)
   useEffect(()=>{ saveAi(ai); },[ai]);
   // Never leave a key visible after switching providers or turning AI off.
   useEffect(()=>{ setShowKey(false); },[ai.provider, ai.enabled]);
@@ -836,6 +837,7 @@ function App(){
   const doGenerate=()=>{
     const {text,tags}=generate({...form, style:activeStyle}, variant);
     templateText.current = text;
+    lastAutoText.current = text;
     setGenText(text); setTags(tags);
     flash("Draft generated");
   };
@@ -867,17 +869,24 @@ function App(){
     setAiStatus({state:"idle", msg:""});
   };
   // live sync (template, synchronous) — any change to form fields, tone, platform,
-  // variant, or style re-runs the template generator so the user gets instant feedback.
-  // Note: this overwrites manual edits to the draft textarea when a form field changes.
+  // variant, or style re-runs the template generator. When AI polish is OFF, the
+  // template output is what the user sees. When AI polish is ON, we skip painting
+  // the template so the user never sees a "flash" of less-styled template output
+  // before the AI polish arrives; the last polished draft stays visible until the
+  // new polish replaces it. Tags always update so the "Copy #tags" button stays
+  // accurate.
   useEffect(()=>{
     const hasContent = Object.entries(form).some(([k,v])=>
       k!=="platform" && k!=="tone" && typeof v==="string" && v.trim().length>0
     );
-    if(!hasContent){ setGenText(""); setTags([]); templateText.current=""; return; }
+    if(!hasContent){ setGenText(""); setTags([]); templateText.current=""; lastAutoText.current=""; return; }
     const {text, tags:t} = generate({...form, style:activeStyle}, variant);
     templateText.current = text;
-    setGenText(text); setTags(t);
-  },[form, variant, activeStyle]);
+    setTags(t);
+    if(ai.enabled) return;               // let AI polish effect fill the draft
+    setGenText(text);
+    lastAutoText.current = text;
+  },[form, variant, activeStyle, ai.enabled]);
 
   // AI polish (Llama via Ollama) — debounced, replaces the template output with a
   // natural-language rewrite. Aborts on further input to avoid stale replacements.
@@ -903,12 +912,19 @@ function App(){
           form, variant, style:activeStyle,
           signal: ac.signal,
         });
-        // Only replace if user hasn't manually edited since template ran.
-        setGenText(cur => cur === templateText.current ? polished : cur);
+        // Replace the draft only when the current text is one we set ourselves
+        // (either the template output or a previous AI polish, tracked in
+        // lastAutoText). Never clobber a manual textarea edit.
+        setGenText(cur => (cur === lastAutoText.current || cur === "") ? polished : cur);
+        lastAutoText.current = polished;
         setAiStatus({state:"ok", msg:""});
       }catch(e){
         if(e.name==="AbortError") return;
         setAiStatus({state:"error", msg: e.message || String(e)});
+        // AI failed: fall back to template output so the user sees SOMETHING
+        // that reflects their inputs.
+        setGenText(cur => cur === lastAutoText.current || cur === "" ? templateText.current : cur);
+        lastAutoText.current = templateText.current;
       }
     }, 1100);
     return ()=>{ clearTimeout(timer); ac.abort(); };
