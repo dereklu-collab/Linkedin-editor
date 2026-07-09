@@ -90,9 +90,7 @@ const TONES = ["Professional","Warm","Excited","Reflective","Humble","Confident"
 const VARIANTS = [
   {key:"standard", label:"Standard"},
   {key:"short", label:"Shorter"},
-  {key:"polished", label:"More polished"},
-  {key:"personal", label:"More personal"},
-  {key:"professional", label:"More professional"},
+  {key:"professional", label:"Professional"},
 ];
 
 /* ---------- generation engine (template-based MVP) ---------- */
@@ -204,8 +202,7 @@ function generate(d, variant){
   // Depth: tone sets the baseline length; an explicit length variant can override it.
   let depth = TONE_DEPTH[tone] ?? 2;
   if(variant==="short") depth = 1;
-  else if(variant==="polished" || variant==="professional") depth = 3;
-  else if(variant==="personal") depth = Math.max(depth, 2);
+  else if(variant==="professional") depth = 3;
 
   const P = d.platform;
   let parts = [];
@@ -224,15 +221,13 @@ function generate(d, variant){
     } else if(depth === 2){
       const body = [context, learningLine, relevanceLine].filter(Boolean).join(" ");
       if(body) parts.push(body);
-      if(variant==="personal" && momentLine) parts.push(momentLine);
       parts.push(gratitude);
       parts.push(closing);
     } else {
-      // depth 3 — full, multi-paragraph (Professional / Reflective / Story-driven tones, or polished/professional variants)
+      // depth 3 — full, multi-paragraph (Professional / Reflective / Story-driven tones, or professional variant)
       if(context) parts.push(context);
       if(learningLine) parts.push(learningLine + (relevanceLine ? " "+relevanceLine : ""));
       parts.push(reflection);
-      if(variant==="personal" && momentLine) parts.push(momentLine);
       parts.push(gratitude);
       parts.push(closing);
     }
@@ -589,8 +584,6 @@ function buildAiSystemPrompt(form, variant, style){
     : "No specific style — use the requested tone naturally.";
   const varLine = ({
     short:"Keep it noticeably shorter than a default post.",
-    polished:"Aim for a fuller, more polished multi-paragraph piece.",
-    personal:"Lean slightly more personal — include the favorite moment if provided.",
     professional:"Lean more polished and professional; skip casual emoji.",
     standard:"Use a natural default length for the platform.",
   })[variant] || "";
@@ -934,21 +927,8 @@ function App(){
   const limit=PLATFORMS[form.platform].limit;
   const over=count>limit;
 
-  /* copy/export */
+  /* copy */
   const copy=(txt,msg)=>{navigator.clipboard?.writeText(txt).then(()=>flash(msg||"Copied")).catch(()=>flash("Copy failed"));};
-  const download=(content,filename,type="text/plain")=>{
-    const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob);
-    const a=document.createElement("a"); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
-  };
-  const exportPackage=()=>{
-    const pkg={
-      platform:form.platform, generatedAt:new Date().toISOString(),
-      post:genText, hashtags:tags, details:form,
-      photos:photos.map(p=>({name:p.name,caption:p.caption,isHero:p.isHero,order:p.order})),
-    };
-    download(JSON.stringify(pkg,null,2),`contactsheet-${form.platform}-package.json`,"application/json");
-    flash("Package downloaded");
-  };
 
   /* drafts */
   const saveCurrent=()=>{
@@ -1222,8 +1202,6 @@ function App(){
                   </span>
                   <div className="flex gap-2 flex-wrap">
                     <button className="btn btn-ghost" onClick={doGenerate}>↻ Regenerate</button>
-                    <button className="btn btn-ghost" onClick={()=>copy(tags.join(" "),"Hashtags copied")} disabled={!tags.length}>Copy #tags</button>
-                    <button className="btn btn-ghost" onClick={()=>download(genText,`post-${form.platform}.txt`)}>Download .txt</button>
                     <button className="btn btn-primary" onClick={()=>copy(genText,"Post copied")}>Copy post</button>
                   </div>
                 </div>
@@ -1238,7 +1216,6 @@ function App(){
 
             <div className="flex gap-2 mt-4 pt-4 border-t flex-wrap" style={{borderColor:"var(--line)"}}>
               <button className="btn btn-ghost" onClick={saveCurrent}>◫ Save draft</button>
-              <button className="btn btn-ghost" onClick={exportPackage} disabled={!genText}>⇩ Export package</button>
             </div>
           </div>
 
